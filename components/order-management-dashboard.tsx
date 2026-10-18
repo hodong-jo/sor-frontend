@@ -26,6 +26,7 @@ import {
   TrendingUp,
   X,
 } from 'lucide-react'
+import { NewOrderDialog, type NewOrderPayload } from '@/components/new-order-dialog'
 import { OrderDetailPanel } from '@/components/order-detail-panel'
 import {
   toOrderStatus,
@@ -182,6 +183,7 @@ export default function OrderManagementDashboard() {
   const [page, setPage] = useState(1)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [notice, setNotice] = useState('')
+  const [newOrderOpen, setNewOrderOpen] = useState(false)
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
   const selectedOrder = useMemo(
   () => orders.find((order) => order.id === selectedOrderId) ?? null,
@@ -235,6 +237,11 @@ export default function OrderManagementDashboard() {
 useEffect(() => {
   fetchOrders()
 }, [])
+
+  function handleNewOrderSubmit(order: NewOrderPayload) {
+    setNotice(`주문 등록 요청을 전달했습니다: ${order.symbol} · ${numberFormat.format(order.quantity)}주 · ₩${numberFormat.format(order.price)}`)
+    window.setTimeout(() => setNotice(''), 4000)
+  }
 
   function openOrder(order: Order) {
     window.history.pushState(
@@ -295,6 +302,7 @@ const filteredOrders = useMemo(() => {
 
   return (
     <div className="min-h-screen bg-[#f5f7fb] text-slate-900">
+      <NewOrderDialog open={newOrderOpen} onOpenChange={setNewOrderOpen} onSubmit={handleNewOrderSubmit} />
       <Sidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
       <main className="min-h-screen lg:pl-[252px]">
         <header className="sticky top-0 z-20 flex h-[70px] items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 backdrop-blur sm:px-7 lg:px-9">
@@ -325,6 +333,7 @@ const filteredOrders = useMemo(() => {
             </div>
             <div className="flex items-center gap-2.5">
               <span className="mr-1 hidden text-[11px] text-slate-400 md:inline">2026년 10월 18일 · 일요일</span>
+              <button onClick={() => setNewOrderOpen(true)} className="hidden h-9 items-center gap-2 rounded-lg bg-[#1d64d8] px-3 text-[11px] font-semibold text-white shadow-sm shadow-blue-900/10 transition hover:bg-[#1858c1] sm:inline-flex"><Plus size={14} aria-hidden="true" /> 신규 주문</button>
               <button onClick={() => { setNotice('주문 목록을 새로고침했습니다.'); window.setTimeout(() => setNotice(''), 2600) }} className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"><RefreshCw size={14} /> 새로고침</button>
               <button onClick={() => { setNotice('주문 내역 내보내기를 준비했습니다.'); window.setTimeout(() => setNotice(''), 2600) }} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#1d64d8] px-3 text-[11px] font-semibold text-white shadow-sm shadow-blue-900/10 transition hover:bg-[#1858c1]"><ArrowDownToLine size={14} /> 내보내기</button>
             </div>
@@ -352,7 +361,7 @@ const filteredOrders = useMemo(() => {
                   {query && <button onClick={() => changeQuery('')} aria-label="검색어 지우기" className="absolute right-2 flex size-6 items-center justify-center rounded text-slate-400 hover:bg-slate-100"><X size={13} /></button>}
                 </label>
                 <button aria-label="주문 필터 설정" className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50"><SlidersHorizontal size={15} /></button>
-                <button aria-label="신규 주문" onClick={() => { setNotice('신규 주문 접수는 운영 시스템에서 진행해 주세요.'); window.setTimeout(() => setNotice(''), 2600) }} className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#1d64d8] text-white transition hover:bg-[#1858c1] sm:hidden"><Plus size={16} /></button>
+                <button aria-label="신규 주문 등록" onClick={() => setNewOrderOpen(true)} className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#1d64d8] text-white transition hover:bg-[#1858c1] sm:hidden"><Plus size={16} /></button>
               </div>
             </div>
 
