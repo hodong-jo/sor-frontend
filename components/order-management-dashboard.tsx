@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Activity,
   ArrowDownToLine,
@@ -26,6 +26,7 @@ import {
   TrendingUp,
   X,
 } from 'lucide-react'
+import { OrderDetailPanel } from '@/components/order-detail-panel'
 import { orders, statusFilters, type Order, type OrderStatus } from '@/lib/orders'
 
 const numberFormat = new Intl.NumberFormat('ko-KR')
@@ -132,7 +133,7 @@ function SummaryCard({ label, value, note, icon: Icon, tone, trend }: {
   )
 }
 
-function OrdersTable({ rows }: { rows: Order[] }) {
+function OrdersTable({ rows, onSelect }: { rows: Order[]; onSelect: (order: Order) => void }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[780px] border-collapse text-left">
@@ -149,14 +150,14 @@ function OrdersTable({ rows }: { rows: Order[] }) {
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rows.map((order) => (
-            <tr key={order.id} className="group transition-colors hover:bg-slate-50/80">
+            <tr key={order.id} tabIndex={0} aria-label={`주문 ${order.id} 상세 보기`} onClick={() => onSelect(order)} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onSelect(order) } }} className="group cursor-pointer transition-colors hover:bg-slate-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500">
               <td className="whitespace-nowrap px-5 py-[15px]"><span className="font-mono text-[11px] font-semibold tracking-[-0.02em] text-slate-700">{order.id}</span></td>
               <td className="px-4 py-[13px]"><div className="flex items-center gap-2.5"><span className={`flex size-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold ${order.side === '매수' ? 'bg-rose-50 text-rose-600' : 'bg-blue-50 text-blue-600'}`}>{order.side}</span><div><p className="whitespace-nowrap text-[12px] font-semibold text-slate-800">{order.name}</p><p className="mt-0.5 font-mono text-[10px] text-slate-400">{order.symbol}</p></div></div></td>
               <td className="whitespace-nowrap px-4 py-4 text-right font-mono text-[12px] font-medium tabular-nums text-slate-700">{numberFormat.format(order.quantity)}주</td>
               <td className="whitespace-nowrap px-4 py-4 text-right font-mono text-[12px] font-semibold tabular-nums text-slate-800">₩{numberFormat.format(order.price)}</td>
               <td className="whitespace-nowrap px-4 py-4"><StatusBadge status={order.status} /></td>
               <td className="whitespace-nowrap px-4 py-4 font-mono text-[11px] tabular-nums text-slate-500">{order.time}</td>
-              <td className="px-3 py-4 text-right"><button aria-label={`${order.id} 상세 메뉴`} className="rounded-md p-1.5 text-slate-300 opacity-0 transition hover:bg-slate-100 hover:text-slate-600 group-hover:opacity-100 focus:opacity-100"><MoreHorizontal size={16} /></button></td>
+              <td className="px-3 py-4 text-right"><button aria-label={`${order.id} 상세 보기`} onClick={(event) => { event.stopPropagation(); onSelect(order) }} className="rounded-md p-1.5 text-slate-300 opacity-0 transition hover:bg-slate-100 hover:text-slate-600 group-hover:opacity-100 focus:opacity-100"><MoreHorizontal size={16} /></button></td>
             </tr>
           ))}
         </tbody>
@@ -171,6 +172,43 @@ export default function OrderManagementDashboard() {
   const [page, setPage] = useState(1)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [notice, setNotice] = useState('')
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
+  const selectedOrder = useMemo(() => orders.find((order) => order.id === selectedOrderId) ?? null, [selectedOrderId])
+
+  function openOrder(order: Order) {
+    window.history.pushState(
+      { ...(window.history.state ?? {}), selectedOrderId: order.id },
+      '',
+      `${window.location.pathname}${window.location.search}#order=${encodeURIComponent(order.id)}`,
+    )
+    setSelectedOrderId(order.id)
+  }
+
+  function closeOrder() {
+    if (window.history.state?.selectedOrderId === selectedOrderId) {
+      window.history.back()
+    } else {
+      setSelectedOrderId(null)
+    }
+  }
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const orderId = window.history.state?.selectedOrderId
+      setSelectedOrderId(typeof orderId === 'string' ? orderId : null)
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  useEffect(() => {
+    if (!selectedOrderId) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeOrder()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedOrderId])
 
   const filteredOrders = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -213,6 +251,7 @@ export default function OrderManagementDashboard() {
           </div>
         </header>
 
+        {selectedOrder ? <OrderDetailPanel order={selectedOrder} onClose={closeOrder} /> : (
         <div className="mx-auto max-w-[1440px] px-4 pb-10 pt-6 sm:px-7 sm:pt-8 lg:px-9 lg:pt-9">
           <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
@@ -236,7 +275,7 @@ export default function OrderManagementDashboard() {
             <SummaryCard label="전체 주문" value="128" note="오늘 접수된 전체 주문" icon={Activity} tone="blue" trend="12.8%" />
             <SummaryCard label="접수" value="24" note="검증 대기 중인 주문" icon={Clock3} tone="amber" />
             <SummaryCard label="라우팅 완료" value="89" note="정상 체결 경로 배정" icon={ShieldCheck} tone="green" trend="8.2%" />
-            <SummaryCard label="거절" value="15" note="확인 및 조치가 필요한 주문" icon={CircleAlert} tone="red" />
+            <SummaryCard label="���절" value="15" note="확인 및 조치가 필요한 주문" icon={CircleAlert} tone="red" />
           </section>
 
           <section aria-labelledby="orders-heading" className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.025)]">
@@ -268,7 +307,7 @@ export default function OrderManagementDashboard() {
               <span className="hidden shrink-0 items-center gap-1.5 pb-0.5 text-[10px] text-slate-400 md:inline-flex"><span className="size-1.5 rounded-full bg-emerald-500" />실시간 업데이트</span>
             </div>
 
-            {visibleOrders.length > 0 ? <OrdersTable rows={visibleOrders} /> : (
+            {visibleOrders.length > 0 ? <OrdersTable rows={visibleOrders} onSelect={openOrder} /> : (
               <div className="flex min-h-[260px] flex-col items-center justify-center px-6 text-center">
                 <div className="mb-3 flex size-11 items-center justify-center rounded-full bg-slate-100 text-slate-400"><Search size={19} /></div>
                 <p className="text-[13px] font-semibold text-slate-700">검색 결과가 없습니다</p>
@@ -289,6 +328,7 @@ export default function OrderManagementDashboard() {
           </section>
           <footer className="mt-5 flex flex-col items-start justify-between gap-2 px-1 text-[10px] text-slate-400 sm:flex-row sm:items-center"><p>© 2026 SOR Console. 스마트 주문 라우팅 운영 시스템</p><p className="flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-emerald-500" />데이터 동기화 완료 <span className="font-mono">14:32:18</span></p></footer>
         </div>
+        )}
       </main>
     </div>
   )
