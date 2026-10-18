@@ -21,6 +21,7 @@ export type ApiOrder = {
   symbol: string
   quantity: number
   price: number
+  orderTime?: string
   status: 'RECEIVED' | 'VALIDATED' | 'ROUTED' | 'COMPLETED' | 'REJECTED'
 }
 

@@ -39,7 +39,7 @@ export function NewOrderDialog({ open, onOpenChange, onSubmit }: NewOrderDialogP
     onOpenChange(nextOpen)
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
     const normalizedSymbol = symbol.trim()
@@ -58,8 +58,42 @@ export function NewOrderDialog({ open, onOpenChange, onSubmit }: NewOrderDialogP
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) return
 
-    onSubmit({ symbol: normalizedSymbol, quantity: parsedQuantity, price: parsedPrice })
-    onOpenChange(false)
+    // 1. 백엔드 전송용 데이터 객체 생성 (요청하신 JSON 형태)
+    const requestBody = {
+      orderId: 'ORD-' + Date.now(), // 고유 주문번호 생성 (예: ORD-1718...)
+      symbol: normalizedSymbol,
+      quantity: parsedQuantity,
+      price: parsedPrice,
+    }
+
+    try {
+      // 2. 백엔드 POST /orders API 호출
+      const response = await fetch('http://localhost:8080/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      })
+
+      if (!response.ok) {
+        throw new Error('주문 등록 실패')
+      }
+
+      const savedOrder = await response.json()
+      console.log('백엔드 저장 성공:', savedOrder)
+
+      // 3. 부모 컴포넌트에 알림 및 모달 닫기
+      onSubmit({ symbol: normalizedSymbol, quantity: parsedQuantity, price: parsedPrice })
+      onOpenChange(false)
+      
+      // 4. (선택) 등록 직후 목록을 새로고침하기 위해 페이지 새로고침 또는 목록 불러오기 함수 호출
+      window.location.reload() 
+
+    } catch (error) {
+      console.error('주문 등록 중 오류 발생:', error)
+      alert('주문 등록에 실패했습니다. 백엔드 서버 상태를 확인해 주세요.')
+    }
   }
 
   return (

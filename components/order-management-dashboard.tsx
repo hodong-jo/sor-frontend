@@ -47,6 +47,19 @@ const statusStyles: Record<OrderStatus, string> = {
   거절: 'bg-rose-50 text-rose-700 ring-rose-200',
 }
 
+function formatOrderTime(timeString?: string) {
+  if (!timeString) return '-'
+  try {
+    // "2026-10-18T09:05:12" 형식인 경우 "09:05:12"만 추출
+    if (timeString.includes('T')) {
+      return timeString.split('T')[1].substring(0, 8)
+    }
+    return timeString
+  } catch (e) {
+    return timeString
+  }
+}
+
 function StatusBadge({ status }: { status: OrderStatus }) {
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${statusStyles[status]}`}>
@@ -205,6 +218,9 @@ export default function OrderManagementDashboard() {
   try {
     const response = await fetch('http://localhost:8080/orders')
 
+    // const dataLog: ApiOrder[] = await response.json()
+    // console.log('백엔드에서 받아온 실제 데이터:', dataLog)
+
     if (!response.ok) {
       throw new Error(`주문 조회 실패: HTTP ${response.status}`)
     }
@@ -219,10 +235,12 @@ export default function OrderManagementDashboard() {
       quantity: item.quantity,
       price: item.price,
       status: toOrderStatus(item.status),
-      time: '-',
+      time: formatOrderTime(item.orderTime),
     }))
 
     setOrders(mappedOrders)
+
+    
   } catch (error) {
     setApiError(
       error instanceof Error
