@@ -19,6 +19,7 @@ const statusStyles: Record<OrderStatus, string> = {
   접수: 'bg-sky-50 text-sky-700 ring-sky-200',
   '검증 완료': 'bg-amber-50 text-amber-700 ring-amber-200',
   '라우팅 완료': 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  '처리 완료': 'bg-blue-50 text-blue-700 ring-blue-200',
   거절: 'bg-rose-50 text-rose-700 ring-rose-200',
 }
 
