@@ -23,12 +23,27 @@ const orderStatusCode: Record<OrderStatus, string> = {
   접수: 'RECEIVED',
   '검증 완료': 'VALIDATED',
   '라우팅 완료': 'ROUTED',
+  '처리 완료': 'COMPLETED',
   거절: 'REJECTED',
 }
 
 function addSeconds(time: string, seconds: number) {
-  const [hours, minutes, baseSeconds] = time.split(':').map(Number)
+if (!time || !time.includes(':')) {
+    return '00:00:00'
+  }
+
+  const parts = time.split(':').map(Number)
+  const hours = parts[0] || 0
+  const minutes = parts[1] || 0
+  const baseSeconds = parts[2] || 0
+
   const date = new Date(Date.UTC(2026, 9, 18, hours, minutes, baseSeconds + seconds))
+  
+  // 유효한 날짜인지 검증 후 변환
+  if (isNaN(date.getTime())) {
+    return '00:00:00'
+  }
+
   return date.toISOString().slice(11, 19)
 }
 

@@ -27,7 +27,13 @@ import {
   X,
 } from 'lucide-react'
 import { OrderDetailPanel } from '@/components/order-detail-panel'
-import { orders, statusFilters, type Order, type OrderStatus } from '@/lib/orders'
+import {
+  toOrderStatus,
+  statusFilters,
+  type Order,
+  type ApiOrder,
+  type OrderStatus,
+} from '@/lib/orders'
 
 const numberFormat = new Intl.NumberFormat('ko-KR')
 const pageSize = 8
@@ -36,6 +42,7 @@ const statusStyles: Record<OrderStatus, string> = {
   접수: 'bg-sky-50 text-sky-700 ring-sky-200',
   '검증 완료': 'bg-amber-50 text-amber-700 ring-amber-200',
   '라우팅 완료': 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  '처리 완료': 'bg-blue-50 text-blue-700 ring-blue-200',
   거절: 'bg-rose-50 text-rose-700 ring-rose-200',
 }
 
@@ -94,7 +101,7 @@ function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose: () => 
           </div>
           <div className="mt-4 flex items-center gap-3 rounded-lg px-2 py-2">
             <div className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400 to-blue-700 text-[11px] font-bold text-white">김</div>
-            <div className="min-w-0 flex-1"><p className="truncate text-[12px] font-semibold text-slate-200">김도현</p><p className="mt-0.5 text-[10px] text-slate-500">운영 관리자</p></div>
+            <div className="min-w-0 flex-1"><p className="truncate text-[12px] font-semibold text-slate-200">조호동</p><p className="mt-0.5 text-[10px] text-slate-500">운영 관리자</p></div>
             <MoreHorizontal size={16} className="text-slate-500" aria-hidden="true" />
           </div>
         </div>
@@ -168,12 +175,66 @@ function OrdersTable({ rows, onSelect }: { rows: Order[]; onSelect: (order: Orde
 
 export default function OrderManagementDashboard() {
   const [query, setQuery] = useState('')
+  const [orders, setOrders] = useState<Order[]>([])
+  const [loading, setLoading] = useState(true)
+  const [apiError, setApiError] = useState('')
   const [activeFilter, setActiveFilter] = useState<(typeof statusFilters)[number]>('전체')
   const [page, setPage] = useState(1)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [notice, setNotice] = useState('')
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
-  const selectedOrder = useMemo(() => orders.find((order) => order.id === selectedOrderId) ?? null, [selectedOrderId])
+  const selectedOrder = useMemo(
+  () => orders.find((order) => order.id === selectedOrderId) ?? null,
+  [orders, selectedOrderId],
+  )
+  
+  const stats = useMemo(() => {
+    const total = orders.length
+    const received = orders.filter((o) => o.status === '접수').length
+    const routingCompleted = orders.filter((o) => o.status === '라우팅 완료').length
+    const rejected = orders.filter((o) => o.status === '거절').length
+    return { total, received, routingCompleted, rejected }
+  }, [orders])
+
+  async function fetchOrders() {
+  setLoading(true)
+  setApiError('')
+
+  try {
+    const response = await fetch('http://localhost:8080/orders')
+
+    if (!response.ok) {
+      throw new Error(`주문 조회 실패: HTTP ${response.status}`)
+    }
+
+    const data: ApiOrder[] = await response.json()
+
+    const mappedOrders: Order[] = data.map((item) => ({
+      id: item.orderId,
+      symbol: item.symbol,
+      name: item.symbol,
+      side: '매수',
+      quantity: item.quantity,
+      price: item.price,
+      status: toOrderStatus(item.status),
+      time: '-',
+    }))
+
+    setOrders(mappedOrders)
+  } catch (error) {
+    setApiError(
+      error instanceof Error
+        ? error.message
+        : '주문 목록을 불러오지 못했습니다.',
+    )
+  } finally {
+    setLoading(false)
+  }
+}
+
+useEffect(() => {
+  fetchOrders()
+}, [])
 
   function openOrder(order: Order) {
     window.history.pushState(
@@ -210,14 +271,14 @@ export default function OrderManagementDashboard() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [selectedOrderId])
 
-  const filteredOrders = useMemo(() => {
+const filteredOrders = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
     return orders.filter((order) => {
       const matchesStatus = activeFilter === '전체' || order.status === activeFilter
       const matchesQuery = !normalizedQuery || order.id.toLowerCase().includes(normalizedQuery) || order.symbol.includes(normalizedQuery) || order.name.toLowerCase().includes(normalizedQuery)
       return matchesStatus && matchesQuery
     })
-  }, [activeFilter, query])
+  }, [activeFilter, query, orders])
 
   const pageCount = Math.max(1, Math.ceil(filteredOrders.length / pageSize))
   const visibleOrders = filteredOrders.slice((page - 1) * pageSize, page * pageSize)
@@ -272,10 +333,10 @@ export default function OrderManagementDashboard() {
           {notice && <div role="status" className="mb-4 flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-[12px] font-medium text-blue-700"><Check size={14} />{notice}</div>}
 
           <section aria-label="주문 요약" className="mb-6 grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-4 xl:gap-4">
-            <SummaryCard label="전체 주문" value="128" note="오늘 접수된 전체 주문" icon={Activity} tone="blue" trend="12.8%" />
-            <SummaryCard label="접수" value="24" note="검증 대기 중인 주문" icon={Clock3} tone="amber" />
-            <SummaryCard label="라우팅 완료" value="89" note="정상 체결 경로 배정" icon={ShieldCheck} tone="green" trend="8.2%" />
-            <SummaryCard label="���절" value="15" note="확인 및 조치가 필요한 주문" icon={CircleAlert} tone="red" />
+            <SummaryCard label="전체 주문" value={String(stats.total)} note="DB에 등록된 전체 주문" icon={Activity} tone="blue" />
+            <SummaryCard label="접수" value={String(stats.received)} note="검증 대기 중인 주문" icon={Clock3} tone="amber" />
+            <SummaryCard label="라우팅 완료" value={String(stats.routingCompleted)} note="정상 체결 경로 배정" icon={ShieldCheck} tone="green" />
+            <SummaryCard label="거절" value={String(stats.rejected)} note="확인 및 조치가 필요한 주문" icon={CircleAlert} tone="red" />
           </section>
 
           <section aria-labelledby="orders-heading" className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.025)]">
