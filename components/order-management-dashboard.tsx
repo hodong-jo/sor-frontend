@@ -3,12 +3,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Activity,
+  ArrowDown,
   ArrowDownToLine,
   ArrowLeft,
   ArrowRight,
+  ArrowUp,
   ArrowUpRight,
+  BriefcaseBusiness,
+  GripVertical,
   Bell,
   Check,
+  ChartCandlestick,
   ChevronDown,
   CircleAlert,
   Clock3,
@@ -26,9 +31,12 @@ import {
   TrendingUp,
   X,
 } from 'lucide-react'
-import { NewOrderDialog, type NewOrderPayload } from '@/components/new-order-dialog'
+import { NewOrderDialog } from '@/components/new-order-dialog'
 import { OrderDetailPanel } from '@/components/order-detail-panel'
 import { StockMarketPanel } from '@/components/stock-market-panel'
+import { PortfolioView } from '@/components/portfolio-view'
+import { calculatePortfolioPositions } from '@/lib/portfolio'
+import { getStockByCode } from '@/lib/stock-search'
 import {
   toOrderStatus,
   statusFilters,
@@ -39,6 +47,28 @@ import {
 
 const numberFormat = new Intl.NumberFormat('ko-KR')
 const pageSize = 8
+
+type MainMenuId = 'dashboard' | 'orders' | 'portfolio' | 'stocks' | 'routing'
+type DashboardView = 'orders' | 'portfolio' | 'stocks'
+
+const defaultMainMenuOrder: MainMenuId[] = ['dashboard', 'orders', 'portfolio', 'stocks', 'routing']
+const mainMenuItems: Record<MainMenuId, { label: string; icon: typeof Activity; view?: DashboardView }> = {
+  dashboard: { label: '대시보드', icon: LayoutDashboard },
+  orders: { label: '주문 관리', icon: ListFilter, view: 'orders' },
+  portfolio: { label: '보유종목', icon: BriefcaseBusiness, view: 'portfolio' },
+  stocks: { label: '종목 검색', icon: ChartCandlestick, view: 'stocks' },
+  routing: { label: '라우팅 현황', icon: Radio },
+}
+
+function isMainMenuId(value: unknown): value is MainMenuId {
+  return typeof value === 'string' && value in mainMenuItems
+}
+
+function parseMainMenuOrder(value: unknown): MainMenuId[] | null {
+  if (!Array.isArray(value) || value.length !== defaultMainMenuOrder.length || !value.every(isMainMenuId)) return null
+  const uniqueIds = new Set(value)
+  return uniqueIds.size === defaultMainMenuOrder.length ? value : null
+}
 
 const statusStyles: Record<OrderStatus, string> = {
   접수: 'bg-sky-50 text-sky-700 ring-sky-200',
@@ -70,7 +100,17 @@ function StatusBadge({ status }: { status: OrderStatus }) {
   )
 }
 
-function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose: () => void }) {
+function Sidebar({ mobileOpen, onClose, activeView, onNavigate, menuOrder, menuEditing, onToggleMenuEditing, onMoveMenuItem, onDropMenuItem }: {
+  mobileOpen: boolean
+  onClose: () => void
+  activeView: DashboardView
+  onNavigate: (view: DashboardView) => void
+  menuOrder: MainMenuId[]
+  menuEditing: boolean
+  onToggleMenuEditing: () => void
+  onMoveMenuItem: (id: MainMenuId, direction: -1 | 1) => void
+  onDropMenuItem: (sourceId: MainMenuId, targetId: MainMenuId) => void
+}) {
   return (
     <>
       {mobileOpen && <button aria-label="메뉴 닫기" onClick={onClose} className="fixed inset-0 z-30 bg-slate-950/50 lg:hidden" />}
@@ -82,27 +122,70 @@ function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose: () => 
             </div>
             <div>
               <p className="text-[15px] font-bold tracking-[-0.03em] text-white">SOR Console</p>
-              <p className="mt-0.5 text-[10px] font-medium tracking-[0.14em] text-slate-500">스마트 주문 라우팅 운영</p>
+              <p className="mt-0.5 text-[10px] font-medium tracking-[0.14em] text-slate-500">모의투자 관리</p>
             </div>
           </div>
           <button onClick={onClose} aria-label="메뉴 닫기" className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 lg:hidden"><X size={18} /></button>
         </div>
 
         <div className="px-4 pt-7">
-          <p className="px-3 pb-3 text-[10px] font-bold tracking-[0.16em] text-slate-500">메인 메뉴</p>
+          <div className="mb-3 flex items-center justify-between px-3">
+            <p className="text-[10px] font-bold tracking-[0.16em] text-slate-500">메인 메뉴</p>
+            <button
+              type="button"
+              aria-pressed={menuEditing}
+              onClick={onToggleMenuEditing}
+              className={`rounded-md px-2 py-1 text-[10px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${menuEditing ? 'bg-[#1f6feb]/20 text-[#9bc0ff]' : 'text-slate-500 hover:bg-white/[0.06] hover:text-slate-200'}`}
+            >
+              {menuEditing ? '완료' : '순서 편집'}
+            </button>
+          </div>
           <nav aria-label="주요 메뉴" className="flex flex-col gap-1">
-            <button className="flex h-11 items-center gap-3 rounded-lg px-3 text-[13px] font-medium text-slate-400 transition-colors hover:bg-white/[0.05] hover:text-white">
-              <LayoutDashboard size={17} aria-hidden="true" /> 대시보드
-            </button>
-            <button aria-current="page" className="relative flex h-11 items-center gap-3 rounded-lg bg-[#1f6feb]/15 px-3 text-[13px] font-semibold text-[#79aaff]">
-              <span className="absolute inset-y-2 left-0 w-[3px] rounded-r-full bg-[#4389ff]" />
-              <ListFilter size={17} aria-hidden="true" /> 주문 관리
-              <span className="ml-auto rounded-md bg-[#1f6feb]/20 px-1.5 py-0.5 text-[10px] font-semibold text-[#8bb5ff]">128</span>
-            </button>
-            <button className="flex h-11 items-center gap-3 rounded-lg px-3 text-[13px] font-medium text-slate-400 transition-colors hover:bg-white/[0.05] hover:text-white">
-              <Radio size={17} aria-hidden="true" /> 라우팅 현황
-            </button>
+            {menuOrder.map((id, index) => {
+              const item = mainMenuItems[id]
+              const Icon = item.icon
+              const isActive = item.view === activeView
+              return (
+                <div
+                  key={id}
+                  draggable={menuEditing}
+                  onDragStart={(event) => {
+                    if (!menuEditing) return
+                    event.dataTransfer.effectAllowed = 'move'
+                    event.dataTransfer.setData('text/plain', id)
+                  }}
+                  onDragOver={(event) => { if (menuEditing) event.preventDefault() }}
+                  onDrop={(event) => {
+                    if (!menuEditing) return
+                    event.preventDefault()
+                    const sourceId = event.dataTransfer.getData('text/plain')
+                    if (isMainMenuId(sourceId)) onDropMenuItem(sourceId, id)
+                  }}
+                  className={`flex items-center rounded-lg transition-colors ${menuEditing ? 'cursor-grab border border-dashed border-white/10 bg-white/[0.025]' : ''}`}
+                >
+                  <button
+                    type="button"
+                    aria-current={isActive ? 'page' : undefined}
+                    onClick={() => { if (item.view) onNavigate(item.view) }}
+                    className={`relative flex h-11 min-w-0 flex-1 items-center gap-3 rounded-lg px-3 text-left text-[13px] transition-colors ${isActive ? 'bg-[#1f6feb]/15 font-semibold text-[#79aaff]' : 'font-medium text-slate-400 hover:bg-white/[0.05] hover:text-white'}`}
+                  >
+                    {isActive && <span className="absolute inset-y-2 left-0 w-[3px] rounded-r-full bg-[#4389ff]" />}
+                    <Icon size={17} aria-hidden="true" />
+                    <span className="truncate">{item.label}</span>
+                    {id === 'orders' && <span className="ml-auto rounded-md bg-[#1f6feb]/20 px-1.5 py-0.5 text-[10px] font-semibold text-[#8bb5ff]">128</span>}
+                  </button>
+                  {menuEditing && (
+                    <div className="flex shrink-0 items-center pr-1">
+                      <GripVertical size={13} className="mr-0.5 text-slate-500" aria-hidden="true" />
+                      <button type="button" aria-label={`${item.label} 위로 이동`} disabled={index === 0} onClick={() => onMoveMenuItem(id, -1)} className="flex size-6 items-center justify-center rounded text-slate-400 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-30"><ArrowUp size={12} aria-hidden="true" /></button>
+                      <button type="button" aria-label={`${item.label} 아래로 이동`} disabled={index === menuOrder.length - 1} onClick={() => onMoveMenuItem(id, 1)} className="flex size-6 items-center justify-center rounded text-slate-400 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-30"><ArrowDown size={12} aria-hidden="true" /></button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </nav>
+          {menuEditing && <p className="mt-2 px-3 text-[9px] leading-relaxed text-slate-500">끌어서 놓거나 화살표로 메뉴 순서를 바꾸세요.</p>}
         </div>
 
         <div className="mt-auto px-4 pb-5">
@@ -196,18 +279,23 @@ export default function OrderManagementDashboard() {
   const [activeFilter, setActiveFilter] = useState<(typeof statusFilters)[number]>('전체')
   const [page, setPage] = useState(1)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [activeView, setActiveView] = useState<DashboardView>('orders')
+  const [menuOrder, setMenuOrder] = useState<MainMenuId[]>(defaultMainMenuOrder)
+  const [menuOrderLoaded, setMenuOrderLoaded] = useState(false)
+  const [menuEditing, setMenuEditing] = useState(false)
   const [notice, setNotice] = useState('')
   const [newOrderOpen, setNewOrderOpen] = useState(false)
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
   const selectedOrder = useMemo(
-  () => orders.find((order) => order.id === selectedOrderId) ?? null,
-  [orders, selectedOrderId],
+    () => orders.find((order) => order.id === selectedOrderId) ?? null,
+    [orders, selectedOrderId],
   )
-  
+  const portfolioPositions = useMemo(() => calculatePortfolioPositions(orders), [orders])
+
   const stats = useMemo(() => {
     const total = orders.length
     const received = orders.filter((o) => o.status === '접수').length
-    const routingCompleted = orders.filter((o) => o.status === '라우팅 완료').length
+    const routingCompleted = orders.filter((o) => o.status === '라우팅 완료' || o.status === '처리 완료').length
     const rejected = orders.filter((o) => o.status === '거절').length
     return { total, received, routingCompleted, rejected }
   }, [orders])
@@ -231,7 +319,7 @@ export default function OrderManagementDashboard() {
     const mappedOrders: Order[] = data.map((item) => ({
       id: item.orderId,
       symbol: item.symbol,
-      name: item.symbol,
+      name: getStockByCode(item.symbol)?.name ?? item.symbol,
       side: '매수',
       quantity: item.quantity,
       price: item.price,
@@ -244,9 +332,11 @@ export default function OrderManagementDashboard() {
     
   } catch (error) {
     setApiError(
-      error instanceof Error
-        ? error.message
-        : '주문 목록을 불러오지 못했습니다.',
+      error instanceof TypeError
+        ? '주문 서버에 연결할 수 없습니다. 백엔드 서버 상태를 확인한 뒤 다시 시도해 주세요.'
+        : error instanceof Error
+          ? error.message
+          : '주문 목록을 불러오지 못했습니다.',
     )
   } finally {
     setLoading(false)
@@ -254,12 +344,34 @@ export default function OrderManagementDashboard() {
 }
 
 useEffect(() => {
-  fetchOrders()
+  void fetchOrders()
 }, [])
 
-  function handleNewOrderSubmit(order: NewOrderPayload) {
-    setNotice(`주문 등록 요청을 전달했습니다: ${order.symbol} · ${numberFormat.format(order.quantity)}주 · ₩${numberFormat.format(order.price)}`)
-    window.setTimeout(() => setNotice(''), 4000)
+  useEffect(() => {
+    try {
+      const savedOrder = window.localStorage.getItem('sor-main-menu-order')
+      if (savedOrder) {
+        const parsedOrder = parseMainMenuOrder(JSON.parse(savedOrder))
+        if (parsedOrder) setMenuOrder(parsedOrder)
+      }
+    } catch {
+      // Ignore invalid or unavailable browser storage and keep the default menu order.
+    } finally {
+      setMenuOrderLoaded(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!menuOrderLoaded) return
+    try {
+      window.localStorage.setItem('sor-main-menu-order', JSON.stringify(menuOrder))
+    } catch {
+      // Menu ordering remains available for the current session if browser storage is disabled.
+    }
+  }, [menuOrder, menuOrderLoaded])
+
+  async function handleNewOrderSubmit() {
+    await fetchOrders()
   }
 
   function openOrder(order: Order) {
@@ -308,6 +420,7 @@ const filteredOrders = useMemo(() => {
 
   const pageCount = Math.max(1, Math.ceil(filteredOrders.length / pageSize))
   const visibleOrders = filteredOrders.slice((page - 1) * pageSize, page * pageSize)
+  const activeSectionTitle = activeView === 'stocks' ? '종목 검색' : activeView === 'portfolio' ? '보유종목' : '주문 관리'
 
   function changeFilter(filter: (typeof statusFilters)[number]) {
     setActiveFilter(filter)
@@ -319,16 +432,52 @@ const filteredOrders = useMemo(() => {
     setPage(1)
   }
 
+  function moveMenuItem(id: MainMenuId, direction: -1 | 1) {
+    setMenuOrder((current) => {
+      const from = current.indexOf(id)
+      const to = from + direction
+      if (from < 0 || to < 0 || to >= current.length) return current
+      const next = [...current]
+      ;[next[from], next[to]] = [next[to], next[from]]
+      return next
+    })
+  }
+
+  function dropMenuItem(sourceId: MainMenuId, targetId: MainMenuId) {
+    setMenuOrder((current) => {
+      const from = current.indexOf(sourceId)
+      const target = current.indexOf(targetId)
+      if (from < 0 || target < 0 || from === target) return current
+      const next = [...current]
+      const [moved] = next.splice(from, 1)
+      next.splice(from < target ? target - 1 : target, 0, moved)
+      return next
+    })
+  }
+
   return (
     <div className="min-h-screen bg-[#f5f7fb] text-slate-900">
       <NewOrderDialog open={newOrderOpen} onOpenChange={setNewOrderOpen} onSubmit={handleNewOrderSubmit} />
-      <Sidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
+      <Sidebar
+        mobileOpen={mobileOpen}
+        onClose={() => setMobileOpen(false)}
+        activeView={activeView}
+        onNavigate={(view) => {
+          setActiveView(view)
+          setMobileOpen(false)
+        }}
+        menuOrder={menuOrder}
+        menuEditing={menuEditing}
+        onToggleMenuEditing={() => setMenuEditing((editing) => !editing)}
+        onMoveMenuItem={moveMenuItem}
+        onDropMenuItem={dropMenuItem}
+      />
       <main className="min-h-screen lg:pl-[252px]">
         <header className="sticky top-0 z-20 flex h-[70px] items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 backdrop-blur sm:px-7 lg:px-9">
           <div className="flex items-center gap-3">
             <button onClick={() => setMobileOpen(true)} aria-label="메뉴 열기" className="flex size-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 lg:hidden"><Menu size={18} /></button>
-            <div className="hidden items-center gap-2 text-[11px] text-slate-400 sm:flex"><span>운영 콘솔</span><span className="text-slate-300">/</span><span className="font-medium text-slate-600">주문 관리</span></div>
-            <div className="sm:hidden"><p className="text-[14px] font-bold text-slate-900">주문 관리</p></div>
+            <div className="hidden items-center gap-2 text-[11px] text-slate-400 sm:flex"><span>운영 콘솔</span><span className="text-slate-300">/</span><span className="font-medium text-slate-600">{activeSectionTitle}</span></div>
+            <div className="sm:hidden"><p className="text-[14px] font-bold text-slate-900">{activeSectionTitle}</p></div>
           </div>
           <div className="flex items-center gap-3 sm:gap-5">
             <div className="hidden items-center gap-2 rounded-full border border-emerald-200/80 bg-emerald-50/70 px-2.5 py-1.5 sm:flex"><span className="relative flex size-1.5"><span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500 opacity-50" /><span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" /></span><span className="text-[11px] font-semibold text-emerald-700">시스템 정상</span></div>
@@ -339,7 +488,18 @@ const filteredOrders = useMemo(() => {
           </div>
         </header>
 
-        {selectedOrder ? <OrderDetailPanel order={selectedOrder} onClose={closeOrder} /> : (
+        {selectedOrder ? <OrderDetailPanel order={selectedOrder} onClose={closeOrder} /> : activeView === 'portfolio' ? (
+          <PortfolioView positions={portfolioPositions} onNewOrder={() => setNewOrderOpen(true)} ordersLoading={loading} ordersError={apiError} onRefreshOrders={fetchOrders} />
+        ) : activeView === 'stocks' ? (
+          <div className="mx-auto max-w-[1440px] px-4 pb-10 pt-6 sm:px-7 sm:pt-8 lg:px-9 lg:pt-9">
+            <div className="mb-7">
+              <h1 className="text-[24px] font-bold tracking-[-0.05em] text-slate-900 sm:text-[27px]">종목 검색</h1>
+              <p className="mt-2 text-[12px] text-slate-500 sm:text-[13px]">전체 종목을 검색하고 선택한 종목의 시세를 조회합니다.</p>
+            </div>
+            <StockMarketPanel />
+            <footer className="mt-5 flex flex-col items-start justify-between gap-2 px-1 text-[10px] text-slate-400 sm:flex-row sm:items-center"><p>© 2026 SOR Console. 스마트 주문 라우팅 운영 시스템</p><p className="flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-emerald-500" />데이터 동기화 완료 <span className="font-mono">14:32:18</span></p></footer>
+          </div>
+        ) : (
         <div className="mx-auto max-w-[1440px] px-4 pb-10 pt-6 sm:px-7 sm:pt-8 lg:px-9 lg:pt-9">
           <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
@@ -353,14 +513,13 @@ const filteredOrders = useMemo(() => {
             <div className="flex items-center gap-2.5">
               <span className="mr-1 hidden text-[11px] text-slate-400 md:inline">2026년 10월 18일 · 일요일</span>
               <button onClick={() => setNewOrderOpen(true)} className="hidden h-9 items-center gap-2 rounded-lg bg-[#1d64d8] px-3 text-[11px] font-semibold text-white shadow-sm shadow-blue-900/10 transition hover:bg-[#1858c1] sm:inline-flex"><Plus size={14} aria-hidden="true" /> 신규 주문</button>
-              <button onClick={() => { setNotice('주문 목록을 새로고침했습니다.'); window.setTimeout(() => setNotice(''), 2600) }} className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"><RefreshCw size={14} /> 새로고침</button>
+              <button type="button" disabled={loading} onClick={() => void fetchOrders()} className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"><RefreshCw size={14} className={loading ? 'animate-spin' : ''} />{loading ? '불러오는 중' : '새로고침'}</button>
               <button onClick={() => { setNotice('주문 내역 내보내기를 준비했습니다.'); window.setTimeout(() => setNotice(''), 2600) }} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#1d64d8] px-3 text-[11px] font-semibold text-white shadow-sm shadow-blue-900/10 transition hover:bg-[#1858c1]"><ArrowDownToLine size={14} /> 내보내기</button>
             </div>
           </div>
 
           {notice && <div role="status" className="mb-4 flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-[12px] font-medium text-blue-700"><Check size={14} />{notice}</div>}
-
-          <StockMarketPanel />
+          {apiError && <div role="alert" className="mb-4 flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] font-medium text-rose-700"><CircleAlert size={14} aria-hidden="true" />{apiError}</div>}
 
           <section aria-label="주문 요약" className="mb-6 grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-4 xl:gap-4">
             <SummaryCard label="전체 주문" value={String(stats.total)} note="DB에 등록된 전체 주문" icon={Activity} tone="blue" />

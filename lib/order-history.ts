@@ -52,10 +52,12 @@ export function getOrderDetailMetadata(order: Order): OrderDetailMetadata {
   const isRouteFailure = order.id === 'SOR-20261018-0118'
   const isValidationFailure = isRejected && !isRouteFailure
   const hasValidated = order.status !== '접수'
-  const hasRouted = order.status === '라우팅 완료' || isRouteFailure
+  const hasRouted = order.status === '라우팅 완료' || order.status === '처리 완료' || isRouteFailure
+  const hasCompleted = order.status === '처리 완료'
   const receivedTime = order.time
   const validatedTime = addSeconds(receivedTime, 12)
   const routedTime = addSeconds(receivedTime, 31)
+  const completedTime = addSeconds(receivedTime, 45)
   const rejectedTime = addSeconds(receivedTime, isRouteFailure ? 48 : 15)
 
   const events: ProcessingEvent[] = [
@@ -91,8 +93,9 @@ export function getOrderDetailMetadata(order: Order): OrderDetailMetadata {
     {
       code: 'COMPLETED',
       label: '체결 완료',
-      state: 'pending',
-      result: '체결 완료 전입니다.',
+      state: hasCompleted ? 'completed' : 'pending',
+      time: hasCompleted ? completedTime : undefined,
+      result: hasCompleted ? '주문 체결이 완료되었습니다.' : '체결 완료 전입니다.',
     },
     {
       code: 'REJECTED',
