@@ -1,10 +1,11 @@
 import { Analytics } from '@vercel/analytics/next'
+import { Toaster } from 'sonner'
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: '주문 관리 | SOR Console',
-  description: '스마트 주문 라우팅 운영 시스템에서 주문 접수와 라우팅 현황을 실시간으로 관리합니다.',
+  title: '모의투자 | SOR Console',
+  description: '모의 주문을 접수하고 체결된 보유종목과 현재 시세, 평가손익을 확인합니다.',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -39,6 +40,7 @@ export default function RootLayout({
     <html lang="ko" className="light">
       <body className="antialiased">
         {children}
+        <Toaster position="bottom-right" richColors duration={4000} />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

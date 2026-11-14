@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Dialog } from '@base-ui/react/dialog'
 import { CircleDollarSign, PackagePlus, Search, X } from 'lucide-react'
+import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { searchStocks, type StockSearchItem } from '@/lib/stock-search'
 
@@ -16,7 +17,7 @@ export type NewOrderPayload = {
 type NewOrderDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSubmit: (order: NewOrderPayload) => void
+  onSubmit: (order: NewOrderPayload) => void | Promise<void>
 }
 
 type OrderFormErrors = Partial<Record<keyof NewOrderPayload, string>>
@@ -29,6 +30,7 @@ export function NewOrderDialog({ open, onOpenChange, onSubmit }: NewOrderDialogP
   const [quantity, setQuantity] = useState('')
   const [price, setPrice] = useState('')
   const [errors, setErrors] = useState<OrderFormErrors>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const stockResults = useMemo(() => searchStocks(stockQuery), [stockQuery])
   const visibleStocks = stockResults.slice(0, MAX_VISIBLE_STOCKS)
 
@@ -43,12 +45,14 @@ export function NewOrderDialog({ open, onOpenChange, onSubmit }: NewOrderDialogP
   }, [open])
 
   function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && isSubmitting) return
     if (!nextOpen) setErrors({})
     onOpenChange(nextOpen)
   }
 
-async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (isSubmitting) return
 
     const normalizedSymbol = selectedStock?.code ?? ''
     const selectedStockName = selectedStock?.name ?? ''
@@ -67,41 +71,40 @@ async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) return
 
-    // 1. 백엔드 전송용 데이터 객체 생성 (요청하신 JSON 형태)
+    const order = {
+      symbol: normalizedSymbol,
+      name: selectedStockName,
+      quantity: parsedQuantity,
+      price: parsedPrice,
+    }
     const requestBody = {
-      orderId: 'ORD-' + Date.now(), // 고유 주문번호 생성 (예: ORD-1718...)
+      orderId: `ORD-${Date.now()}`,
       symbol: normalizedSymbol,
       quantity: parsedQuantity,
       price: parsedPrice,
     }
 
+    setIsSubmitting(true)
     try {
-      // 2. 백엔드 POST /orders API 호출
       const response = await fetch('http://localhost:8080/orders', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
       })
 
-      if (!response.ok) {
-        throw new Error('주문 등록 실패')
-      }
+      if (!response.ok) throw new Error(`주문 접수에 실패했습니다. (HTTP ${response.status})`)
 
-      const savedOrder = await response.json()
-      console.log('백엔드 저장 성공:', savedOrder)
-
-      // 3. 부모 컴포넌트에 알림 및 모달 닫기
-      onSubmit({ symbol: normalizedSymbol, name: selectedStockName, quantity: parsedQuantity, price: parsedPrice })
+      toast.success('모의 주문이 접수되었습니다.', {
+        description: `${order.name} · ${order.quantity.toLocaleString('ko-KR')}주 · 체결 완료 후 보유종목에 반영됩니다.`,
+      })
+      await onSubmit(order)
       onOpenChange(false)
-      
-      // 4. (선택) 등록 직후 목록을 새로고침하기 위해 페이지 새로고침 또는 목록 불러오기 함수 호출
-      window.location.reload() 
-
     } catch (error) {
-      console.error('주문 등록 중 오류 발생:', error)
-      alert('주문 등록에 실패했습니다. 백엔드 서버 상태를 확인해 주세요.')
+      toast.error('주문을 접수하지 못했습니다.', {
+        description: error instanceof TypeError ? '주문 서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.' : error instanceof Error ? error.message : '백엔드 서버 연결 상태를 확인해 주세요.',
+      })
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -122,7 +125,7 @@ async function handleSubmit(event: FormEvent<HTMLFormElement>) {
                 </Dialog.Description>
               </div>
             </div>
-            <Dialog.Close aria-label="모달 닫기" className="flex size-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+            <Dialog.Close disabled={isSubmitting} aria-label="모달 닫기" className="flex size-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50">
               <X size={17} aria-hidden="true" />
             </Dialog.Close>
           </header>
@@ -242,11 +245,11 @@ async function handleSubmit(event: FormEvent<HTMLFormElement>) {
             </fieldset>
 
             <footer className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
-              <button type="button" onClick={() => onOpenChange(false)} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-[12px] font-semibold text-slate-600 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+              <button type="button" disabled={isSubmitting} onClick={() => onOpenChange(false)} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-[12px] font-semibold text-slate-600 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50">
                 취소
               </button>
-              <button type="submit" className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#1d64d8] px-4 text-[12px] font-semibold text-white shadow-sm shadow-blue-900/10 transition hover:bg-[#1858c1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
-                <PackagePlus size={15} aria-hidden="true" /> 주문하기
+              <button type="submit" disabled={isSubmitting} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#1d64d8] px-4 text-[12px] font-semibold text-white shadow-sm shadow-blue-900/10 transition hover:bg-[#1858c1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70">
+                <PackagePlus size={15} aria-hidden="true" /> {isSubmitting ? '접수 중...' : '주문하기'}
               </button>
             </footer>
           </form>
