@@ -13,7 +13,7 @@ import {
   TrendingUp,
 } from 'lucide-react'
 import { fetchStockQuote, type StockQuote } from '@/lib/market-stocks'
-import { searchStocks, STOCK_SEARCH_ITEMS, type StockSearchItem } from '@/lib/stock-search'
+import { searchStocks, STOCK_MASTER_UPDATED_AT, STOCK_SEARCH_ITEMS, type StockSearchItem } from '@/lib/stock-search'
 
 const numberFormat = new Intl.NumberFormat('ko-KR')
 
@@ -58,6 +58,7 @@ function StockSearchResults({
   onSelect: (stock: StockSearchItem) => void
 }) {
   const results = useMemo(() => searchStocks(query), [query])
+  const visibleResults = results.slice(0, 30)
 
   if (!query.trim()) {
     return (
@@ -67,7 +68,7 @@ function StockSearchResults({
         </div>
         <p className="mt-3 text-[12px] font-semibold text-slate-700">종목명 또는 종목코드를 검색해 주세요</p>
         <p className="mt-1 text-[10px] leading-relaxed text-slate-400">
-          현재 임시 검색 목록: {STOCK_SEARCH_ITEMS.map((stock) => stock.name).join(', ')}
+          KIS 마스터 기준 KOSPI·KOSDAQ·KONEX 전체 {STOCK_SEARCH_ITEMS.length.toLocaleString('ko-KR')}종목
         </p>
       </div>
     )
@@ -76,9 +77,9 @@ function StockSearchResults({
   if (results.length === 0) {
     return (
       <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-5 text-center">
-        <p className="text-[12px] font-semibold text-slate-700">임시 검색 목록에서 종목을 찾지 못했습니다</p>
+        <p className="text-[12px] font-semibold text-slate-700">검색된 종목이 없습니다</p>
         <p className="mt-1 text-[10px] leading-relaxed text-slate-400">
-          전체 국내 종목 검색 API는 아직 연결되지 않았습니다. 삼성전자 또는 SK하이닉스를 검색해 보세요.
+          종목명이나 종목코드를 다시 확인해 주세요.
         </p>
       </div>
     )
@@ -86,9 +87,11 @@ function StockSearchResults({
 
   return (
     <div className="mt-5">
-      <p className="mb-2 text-[10px] font-semibold text-slate-400">검색 결과 · 임시 데이터 {results.length}개</p>
+      <p className="mb-2 text-[10px] font-semibold text-slate-400">
+        검색 결과 {results.length.toLocaleString('ko-KR')}개{results.length > visibleResults.length ? ` · 상위 ${visibleResults.length}개 표시` : ''}
+      </p>
       <ul aria-label="종목 검색 결과" className="flex flex-col gap-2">
-        {results.map((stock) => {
+        {visibleResults.map((stock) => {
           const isSelected = selectedStock?.code === stock.code
           return (
             <li key={stock.code}>
@@ -105,7 +108,7 @@ function StockSearchResults({
                   <span className="block truncate text-[12px] font-semibold text-slate-800">{stock.name}</span>
                   <span className="mt-0.5 block font-mono text-[10px] text-slate-400">{stock.code}</span>
                 </span>
-                <span className="text-[10px] font-medium text-slate-400">시세 보기</span>
+                <span className="text-[10px] font-medium text-slate-400">{stock.market} · 시세 보기</span>
               </button>
             </li>
           )
@@ -216,10 +219,10 @@ export function StockMarketPanel() {
           <div className="flex size-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><ChartCandlestick size={16} aria-hidden="true" /></div>
           <div>
             <h2 id="stock-market-heading" className="text-[14px] font-bold tracking-[-0.02em] text-slate-900">종목 검색 · 시세 조회</h2>
-            <p className="mt-0.5 text-[10px] text-slate-400">종목을 선택하면 연결된 백엔드에서 시세를 불러옵니다.</p>
+            <p className="mt-0.5 text-[10px] text-slate-400">KIS 종목 마스터 {STOCK_MASTER_UPDATED_AT} 기준 · 종목 선택 시 백엔드 시세 조회</p>
           </div>
         </div>
-        <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700">임시 검색 목록 {STOCK_SEARCH_ITEMS.length}종목</span>
+        <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-semibold text-blue-700">전체 종목 {STOCK_SEARCH_ITEMS.length.toLocaleString('ko-KR')}개</span>
       </div>
 
       <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(260px,0.78fr)_minmax(0,1.45fr)] lg:gap-6">

@@ -29,6 +29,7 @@ import {
 import { NewOrderDialog, type NewOrderPayload } from '@/components/new-order-dialog'
 import { OrderDetailPanel } from '@/components/order-detail-panel'
 import { StockMarketPanel } from '@/components/stock-market-panel'
+import { getStockByCode } from '@/lib/stock-search'
 import {
   toOrderStatus,
   statusFilters,
@@ -231,7 +232,7 @@ export default function OrderManagementDashboard() {
     const mappedOrders: Order[] = data.map((item) => ({
       id: item.orderId,
       symbol: item.symbol,
-      name: item.symbol,
+      name: getStockByCode(item.symbol)?.name ?? item.symbol,
       side: '매수',
       quantity: item.quantity,
       price: item.price,
@@ -258,7 +259,7 @@ useEffect(() => {
 }, [])
 
   function handleNewOrderSubmit(order: NewOrderPayload) {
-    setNotice(`주문 등록 요청을 전달했습니다: ${order.symbol} · ${numberFormat.format(order.quantity)}주 · ₩${numberFormat.format(order.price)}`)
+    setNotice(`주문 등록 요청을 전달했습니다: ${order.name} (${order.symbol}) · ${numberFormat.format(order.quantity)}주 · ₩${numberFormat.format(order.price)}`)
     window.setTimeout(() => setNotice(''), 4000)
   }
 
