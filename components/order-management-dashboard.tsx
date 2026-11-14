@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import { NewOrderDialog, type NewOrderPayload } from '@/components/new-order-dialog'
 import { OrderDetailPanel } from '@/components/order-detail-panel'
+import { StockMarketPanel } from '@/components/stock-market-panel'
 import {
   toOrderStatus,
   statusFilters,
@@ -192,23 +193,6 @@ export default function OrderManagementDashboard() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [apiError, setApiError] = useState('')
-  // KIS API에서 받아온 주가 정보를 저장하는 상태
-  // 아직 조회 전이거나 조회에 실패하면 null을 유지한다.
-  const [stockPrice, setStockPrice] = useState<{
-    stck_prpr: string
-    prdy_vrss: string
-    prdy_ctrt: string
-    stck_oprc: string
-    stck_hgpr: string
-    stck_lwpr: string
-    acml_vol: string
-  } | null>(null)
-
-  // 주가 조회 중인지 여부를 관리하는 상태
-  const [stockLoading, setStockLoading] = useState(false)
-
-  // 주가 조회 실패 시 오류 메시지를 저장하는 상태
-  const [stockError, setStockError] = useState('')
   const [activeFilter, setActiveFilter] = useState<(typeof statusFilters)[number]>('전체')
   const [page, setPage] = useState(1)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -269,43 +253,8 @@ export default function OrderManagementDashboard() {
   }
 }
 
-// 백엔드에 삼성전자 현재가를 요청하는 함수
-async function fetchSamsungPrice() {
-  // 주가 조회가 시작되었음을 표시하고 이전 오류 메시지를 비운다.
-  setStockLoading(true)
-  setStockError('')
-
-  try {
-    // 우리 백엔드의 주가 조회 API를 호출한다.
-    // 실제 한국투자증권 API 키는 프론트엔드에 노출하지 않는다.
-    const response = await fetch('http://localhost:8080/market/stocks/005930')
-
-    // HTTP 응답이 정상적이지 않으면 오류로 처리한다.
-    if (!response.ok) {
-      throw new Error(`주가 조회 실패: HTTP ${response.status}`)
-    }
-
-    // 백엔드가 반환한 JSON 주가 정보를 읽는다.
-    const data = await response.json()
-
-    // 화면에서 사용할 주가 상태를 갱신한다.
-    setStockPrice(data)
-  } catch (error) {
-    // 네트워크 오류나 서버 오류가 발생하면 화면에 표시할 메시지를 저장한다.
-    setStockError(
-      error instanceof Error
-        ? error.message
-        : '주가 정보를 불러오지 못했습니다.'
-    )
-  } finally {
-    // 성공 여부와 관계없이 조회가 끝났으므로 로딩 상태를 해제한다.
-    setStockLoading(false)
-  }
-}
-
 useEffect(() => {
   fetchOrders()
-  fetchSamsungPrice()
 }, [])
 
   function handleNewOrderSubmit(order: NewOrderPayload) {
@@ -410,6 +359,8 @@ const filteredOrders = useMemo(() => {
           </div>
 
           {notice && <div role="status" className="mb-4 flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-[12px] font-medium text-blue-700"><Check size={14} />{notice}</div>}
+
+          <StockMarketPanel />
 
           <section aria-label="주문 요약" className="mb-6 grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-4 xl:gap-4">
             <SummaryCard label="전체 주문" value={String(stats.total)} note="DB에 등록된 전체 주문" icon={Activity} tone="blue" />
