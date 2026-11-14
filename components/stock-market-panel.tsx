@@ -190,6 +190,7 @@ export function StockMarketPanel() {
     requestController.current?.abort()
     const controller = new AbortController()
     requestController.current = controller
+    setQuery(stock.name)
     setSelectedStock(stock)
     setQuote(null)
     setError('')

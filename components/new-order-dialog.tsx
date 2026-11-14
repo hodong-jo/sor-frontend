@@ -163,7 +163,7 @@ async function handleSubmit(event: FormEvent<HTMLFormElement>) {
                 {!stockQuery.trim() && !selectedStock && (
                   <p id="order-symbol-help" className="text-[11px] text-slate-400">KOSPI·KOSDAQ·KONEX 전체 종목에서 검색 후 선택</p>
                 )}
-                {stockQuery.trim() && stockResults.length > 0 && (
+                {stockQuery.trim() && !selectedStock && stockResults.length > 0 && (
                   <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                     <p className="px-3 py-2 text-[10px] font-medium text-slate-400">
                       검색 결과 {stockResults.length.toLocaleString('ko-KR')}개{stockResults.length > visibleStocks.length ? ` · 상위 ${visibleStocks.length}개 표시` : ''}
@@ -175,7 +175,7 @@ async function handleSubmit(event: FormEvent<HTMLFormElement>) {
                             type="button"
                             onClick={() => {
                               setSelectedStock(stock)
-                              setStockQuery('')
+                              setStockQuery(stock.name)
                               setErrors((current) => ({ ...current, symbol: undefined }))
                             }}
                             className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
@@ -191,7 +191,7 @@ async function handleSubmit(event: FormEvent<HTMLFormElement>) {
                     </ul>
                   </div>
                 )}
-                {stockQuery.trim() && stockResults.length === 0 && (
+                {stockQuery.trim() && !selectedStock && stockResults.length === 0 && (
                   <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-[11px] text-slate-500">검색된 종목이 없습니다.</p>
                 )}
                 {errors.symbol && <p id="order-symbol-error" className="text-[11px] font-medium text-rose-600" role="alert">{errors.symbol}</p>}

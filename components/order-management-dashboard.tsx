@@ -9,6 +9,7 @@ import {
   ArrowUpRight,
   Bell,
   Check,
+  ChartCandlestick,
   ChevronDown,
   CircleAlert,
   Clock3,
@@ -71,7 +72,12 @@ function StatusBadge({ status }: { status: OrderStatus }) {
   )
 }
 
-function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose: () => void }) {
+function Sidebar({ mobileOpen, onClose, activeView, onNavigate }: {
+  mobileOpen: boolean
+  onClose: () => void
+  activeView: 'orders' | 'stocks'
+  onNavigate: (view: 'orders' | 'stocks') => void
+}) {
   return (
     <>
       {mobileOpen && <button aria-label="메뉴 닫기" onClick={onClose} className="fixed inset-0 z-30 bg-slate-950/50 lg:hidden" />}
@@ -95,10 +101,22 @@ function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose: () => 
             <button className="flex h-11 items-center gap-3 rounded-lg px-3 text-[13px] font-medium text-slate-400 transition-colors hover:bg-white/[0.05] hover:text-white">
               <LayoutDashboard size={17} aria-hidden="true" /> 대시보드
             </button>
-            <button aria-current="page" className="relative flex h-11 items-center gap-3 rounded-lg bg-[#1f6feb]/15 px-3 text-[13px] font-semibold text-[#79aaff]">
-              <span className="absolute inset-y-2 left-0 w-[3px] rounded-r-full bg-[#4389ff]" />
+            <button
+              aria-current={activeView === 'orders' ? 'page' : undefined}
+              onClick={() => onNavigate('orders')}
+              className={`relative flex h-11 items-center gap-3 rounded-lg px-3 text-[13px] transition-colors ${activeView === 'orders' ? 'bg-[#1f6feb]/15 font-semibold text-[#79aaff]' : 'font-medium text-slate-400 hover:bg-white/[0.05] hover:text-white'}`}
+            >
+              {activeView === 'orders' && <span className="absolute inset-y-2 left-0 w-[3px] rounded-r-full bg-[#4389ff]" />}
               <ListFilter size={17} aria-hidden="true" /> 주문 관리
               <span className="ml-auto rounded-md bg-[#1f6feb]/20 px-1.5 py-0.5 text-[10px] font-semibold text-[#8bb5ff]">128</span>
+            </button>
+            <button
+              aria-current={activeView === 'stocks' ? 'page' : undefined}
+              onClick={() => onNavigate('stocks')}
+              className={`relative flex h-11 items-center gap-3 rounded-lg px-3 text-[13px] transition-colors ${activeView === 'stocks' ? 'bg-[#1f6feb]/15 font-semibold text-[#79aaff]' : 'font-medium text-slate-400 hover:bg-white/[0.05] hover:text-white'}`}
+            >
+              {activeView === 'stocks' && <span className="absolute inset-y-2 left-0 w-[3px] rounded-r-full bg-[#4389ff]" />}
+              <ChartCandlestick size={17} aria-hidden="true" /> 종목 검색
             </button>
             <button className="flex h-11 items-center gap-3 rounded-lg px-3 text-[13px] font-medium text-slate-400 transition-colors hover:bg-white/[0.05] hover:text-white">
               <Radio size={17} aria-hidden="true" /> 라우팅 현황
@@ -197,6 +215,7 @@ export default function OrderManagementDashboard() {
   const [activeFilter, setActiveFilter] = useState<(typeof statusFilters)[number]>('전체')
   const [page, setPage] = useState(1)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [activeView, setActiveView] = useState<'orders' | 'stocks'>('orders')
   const [notice, setNotice] = useState('')
   const [newOrderOpen, setNewOrderOpen] = useState(false)
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
@@ -309,6 +328,7 @@ const filteredOrders = useMemo(() => {
 
   const pageCount = Math.max(1, Math.ceil(filteredOrders.length / pageSize))
   const visibleOrders = filteredOrders.slice((page - 1) * pageSize, page * pageSize)
+  const activeSectionTitle = activeView === 'stocks' ? '종목 검색' : '주문 관리'
 
   function changeFilter(filter: (typeof statusFilters)[number]) {
     setActiveFilter(filter)
@@ -323,13 +343,21 @@ const filteredOrders = useMemo(() => {
   return (
     <div className="min-h-screen bg-[#f5f7fb] text-slate-900">
       <NewOrderDialog open={newOrderOpen} onOpenChange={setNewOrderOpen} onSubmit={handleNewOrderSubmit} />
-      <Sidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
+      <Sidebar
+        mobileOpen={mobileOpen}
+        onClose={() => setMobileOpen(false)}
+        activeView={activeView}
+        onNavigate={(view) => {
+          setActiveView(view)
+          setMobileOpen(false)
+        }}
+      />
       <main className="min-h-screen lg:pl-[252px]">
         <header className="sticky top-0 z-20 flex h-[70px] items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 backdrop-blur sm:px-7 lg:px-9">
           <div className="flex items-center gap-3">
             <button onClick={() => setMobileOpen(true)} aria-label="메뉴 열기" className="flex size-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 lg:hidden"><Menu size={18} /></button>
-            <div className="hidden items-center gap-2 text-[11px] text-slate-400 sm:flex"><span>운영 콘솔</span><span className="text-slate-300">/</span><span className="font-medium text-slate-600">주문 관리</span></div>
-            <div className="sm:hidden"><p className="text-[14px] font-bold text-slate-900">주문 관리</p></div>
+            <div className="hidden items-center gap-2 text-[11px] text-slate-400 sm:flex"><span>운영 콘솔</span><span className="text-slate-300">/</span><span className="font-medium text-slate-600">{activeSectionTitle}</span></div>
+            <div className="sm:hidden"><p className="text-[14px] font-bold text-slate-900">{activeSectionTitle}</p></div>
           </div>
           <div className="flex items-center gap-3 sm:gap-5">
             <div className="hidden items-center gap-2 rounded-full border border-emerald-200/80 bg-emerald-50/70 px-2.5 py-1.5 sm:flex"><span className="relative flex size-1.5"><span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500 opacity-50" /><span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" /></span><span className="text-[11px] font-semibold text-emerald-700">시스템 정상</span></div>
@@ -340,7 +368,16 @@ const filteredOrders = useMemo(() => {
           </div>
         </header>
 
-        {selectedOrder ? <OrderDetailPanel order={selectedOrder} onClose={closeOrder} /> : (
+        {selectedOrder ? <OrderDetailPanel order={selectedOrder} onClose={closeOrder} /> : activeView === 'stocks' ? (
+          <div className="mx-auto max-w-[1440px] px-4 pb-10 pt-6 sm:px-7 sm:pt-8 lg:px-9 lg:pt-9">
+            <div className="mb-7">
+              <h1 className="text-[24px] font-bold tracking-[-0.05em] text-slate-900 sm:text-[27px]">종목 검색</h1>
+              <p className="mt-2 text-[12px] text-slate-500 sm:text-[13px]">전체 종목을 검색하고 선택한 종목의 시세를 조회합니다.</p>
+            </div>
+            <StockMarketPanel />
+            <footer className="mt-5 flex flex-col items-start justify-between gap-2 px-1 text-[10px] text-slate-400 sm:flex-row sm:items-center"><p>© 2026 SOR Console. 스마트 주문 라우팅 운영 시스템</p><p className="flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-emerald-500" />데이터 동기화 완료 <span className="font-mono">14:32:18</span></p></footer>
+          </div>
+        ) : (
         <div className="mx-auto max-w-[1440px] px-4 pb-10 pt-6 sm:px-7 sm:pt-8 lg:px-9 lg:pt-9">
           <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
@@ -360,8 +397,6 @@ const filteredOrders = useMemo(() => {
           </div>
 
           {notice && <div role="status" className="mb-4 flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-[12px] font-medium text-blue-700"><Check size={14} />{notice}</div>}
-
-          <StockMarketPanel />
 
           <section aria-label="주문 요약" className="mb-6 grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-4 xl:gap-4">
             <SummaryCard label="전체 주문" value={String(stats.total)} note="DB에 등록된 전체 주문" icon={Activity} tone="blue" />
